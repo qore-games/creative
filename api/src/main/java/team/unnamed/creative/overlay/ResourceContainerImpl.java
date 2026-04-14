@@ -516,6 +516,7 @@ public class ResourceContainerImpl implements ResourceContainer {
                             .addEntries(entries)
                             .scale(first.scale())
                             .fallback(first.fallback() == null ? second.fallback() : first.fallback())
+                            .transformation(first.transformation() == null ? second.transformation() : first.transformation())
                             .property(first.property())
                             .build();
                 } else {
