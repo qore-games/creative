@@ -47,7 +47,9 @@ public final class EquipmentCategory implements ResourceCategory<Equipment> {
     public @NotNull String folder(PackFormat packFormat) {
         // In 1.21.4 (pack format 43), the equipment stuff was
         // moved from models/equipment to just equipment
-        return (packFormat.min().major() >= 43 || packFormat.min().major() < 0) ? "equipment" : "models/equipment";
+        return (packFormat.min().major() >= 43 || packFormat.equals(PackFormat.UNKNOWN))
+                ? "equipment"
+                : "models/equipment";
     }
 
     @Override

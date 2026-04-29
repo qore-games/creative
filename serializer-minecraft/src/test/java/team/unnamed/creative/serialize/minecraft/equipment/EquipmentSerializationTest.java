@@ -29,10 +29,19 @@ import org.junit.jupiter.api.Test;
 import team.unnamed.creative.equipment.Equipment;
 import team.unnamed.creative.equipment.EquipmentLayer;
 import team.unnamed.creative.equipment.EquipmentLayerType;
+import team.unnamed.creative.metadata.pack.FormatVersion;
+import team.unnamed.creative.metadata.pack.PackFormat;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class EquipmentSerializationTest {
+    @Test
+    void test_category_folder_resolution() {
+        assertEquals("equipment", EquipmentCategory.INSTANCE.folder(PackFormat.UNKNOWN));
+        assertEquals("models/equipment", EquipmentCategory.INSTANCE.folder(PackFormat.format(FormatVersion.of(42))));
+        assertEquals("equipment", EquipmentCategory.INSTANCE.folder(PackFormat.format(FormatVersion.of(43))));
+    }
+
     @Test
     void test_serialization() throws Exception {
         Equipment equipment = Equipment.equipment()
