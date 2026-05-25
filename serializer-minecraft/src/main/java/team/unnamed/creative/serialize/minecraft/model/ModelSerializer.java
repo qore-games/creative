@@ -59,11 +59,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Logger;
 
 @ApiStatus.Internal
 public final class ModelSerializer implements JsonResourceSerializer<Model>, JsonResourceDeserializer<Model> {
 
     private static final float MINECRAFT_UV_UNIT = 16F;
+    private static final Logger LOGGER = Logger.getLogger(ModelSerializer.class.getName());
 
     public static final ModelSerializer INSTANCE;
     public static final ResourceCategoryImpl<Model> CATEGORY;
@@ -167,7 +169,7 @@ public final class ModelSerializer implements JsonResourceSerializer<Model>, Jso
         List<Element> elements = new ArrayList<>();
         if (objectNode.has("elements")) {
             for (JsonElement elementNode : objectNode.getAsJsonArray("elements")) {
-                elements.add(readElement(elementNode, packFormat));
+                elements.add(readElement(elementNode, packFormat, key));
             }
         }
 
@@ -275,7 +277,7 @@ public final class ModelSerializer implements JsonResourceSerializer<Model>, Jso
         };
     }
 
-    private static Element readElement(JsonElement node, PackFormat packFormat) {
+    private static Element readElement(JsonElement node, PackFormat packFormat, Key modelKey) {
         JsonObject objectNode = node.getAsJsonObject();
         ElementRotation rotation = null;
 
@@ -290,11 +292,22 @@ public final class ModelSerializer implements JsonResourceSerializer<Model>, Jso
             TextureUV uv = null;
             if (elementFaceNode.has("uv")) {
                 JsonArray array = elementFaceNode.getAsJsonArray("uv");
-                Vector2Float from = new Vector2Float(array.get(0).getAsFloat(), array.get(1).getAsFloat());
-                Vector2Float to = new Vector2Float(array.get(2).getAsFloat(), array.get(3).getAsFloat());
+                float u1 = array.get(0).getAsFloat();
+                float v1 = array.get(1).getAsFloat();
+                float u2 = array.get(2).getAsFloat();
+                float v2 = array.get(3).getAsFloat();
+
+                boolean shouldCheckClamp = packFormat.isInRange(FormatVersion.of(FormatVersion.FORMAT_26_1));
+                if (shouldCheckClamp) if (u1 < 0 || v1 < 0 || u2 < 0 || v2 < 0) throw new IllegalArgumentException("""
+                    Negative UV found in model '%s' on face '%s': [%s,%s,%s,%s]
+                    Minecraft 26.1+ rejects out-of-bounds UVs and the model will fail to load
+                    Likely a Blockbench export rounding artifact, clamp negative values to 0
+                    """.formatted(modelKey, face, u1, v1, u2, v2)
+                );
+
                 uv = TextureUV.uv(
-                        from.divide(MINECRAFT_UV_UNIT),
-                        to.divide(MINECRAFT_UV_UNIT)
+                    new Vector2Float(u1, v1).divide(MINECRAFT_UV_UNIT),
+                    new Vector2Float(u2, v2).divide(MINECRAFT_UV_UNIT)
                 );
             }
 
@@ -542,7 +555,8 @@ public final class ModelSerializer implements JsonResourceSerializer<Model>, Jso
                 sprite = jsonObject.get("sprite").getAsString();
                 forceTranslucent = jsonObject.get("force_translucent").getAsBoolean();
             } else sprite = "#missingno";
-            readTextureField(sprite, forceTranslucent, key, particle, layers,  variables);
+            ModelTexture parsed = readTextureField(sprite, forceTranslucent, key, layers, variables);
+            if ("particle".equals(key)) particle = parsed;
         }
 
         return ModelTextures.builder()
@@ -552,10 +566,10 @@ public final class ModelSerializer implements JsonResourceSerializer<Model>, Jso
                 .build();
     }
 
-    private static ModelTexture readTextureField(String valueString, boolean translucent, String key, ModelTexture particle, List<ModelTexture> layers, Map<String, ModelTexture> variables) {
+    private static ModelTexture readTextureField(String valueString, boolean translucent, String key, List<ModelTexture> layers, Map<String, ModelTexture> variables) {
         ModelTexture texture = valueString.charAt(0) == '#'
-                ? ModelTexture.ofReference(valueString.substring(1))
-                : ModelTexture.ofKey(Key.key(valueString));
+                ? ModelTexture.ofReference(valueString.substring(1), translucent)
+                : ModelTexture.ofKey(Key.key(valueString), translucent);
 
         if ("particle".equals(key)) {
             return texture;
