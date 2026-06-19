@@ -79,6 +79,31 @@ final class OverlaysMetaCodec implements MetadataPartCodec<OverlaysMeta> {
 
     @Override
     public void write(final @NotNull JsonWriter writer, final @NotNull OverlaysMeta overlays) throws IOException {
+        // No target pack format known here (e.g. direct toJson) - keep "formats" so
+        // the output stays readable by pre-65 clients. UNKNOWN's min major is 0 (< 65).
+        write(writer, overlays, PackFormat.UNKNOWN);
+    }
+
+    @Override
+    public void write(final @NotNull JsonWriter writer, final @NotNull OverlaysMeta overlays, final @NotNull PackFormat targetFormat) throws IOException {
+        // Minecraft reads the whole pack.mcmeta with a single overlay schema, chosen
+        // for all entries at once:
+        //   - "formats" is understood by every version but is deprecated (warns) on 65+
+        //   - "min_format"/"max_format" only exist on pack format 65+
+        // The legacy "formats" schema must be used for EVERY entry if a pre-65 client
+        // can read the pack (main format starts below 65) or if any overlay entry itself
+        // targets below 65. Only when the main format and all entries are 65+ can the new
+        // "min_format"/"max_format" schema be used exclusively (and stay warning-free).
+        boolean useLegacyFormats = targetFormat.min().major() < 65;
+        if (!useLegacyFormats) {
+            for (final OverlayEntry overlay : overlays.entries()) {
+                if (overlay.formats().min().major() < 65) {
+                    useLegacyFormats = true;
+                    break;
+                }
+            }
+        }
+
         writer.beginObject();
         writer.name("entries");
         writer.beginArray();
@@ -87,14 +112,15 @@ final class OverlaysMetaCodec implements MetadataPartCodec<OverlaysMeta> {
             final int minMajor = overlay.formats().min().major();
             final int maxMajor = overlay.formats().max().major();
 
-            // pack format 65+ deprecates "formats" in favor of min_format/max_format.
-            // only emit "formats" if any part of the range is <= 64 (so old clients
-            // can still read it); only emit min_format/max_format if any part is > 64.
-            if (minMajor <= 64) {
+            // "formats" is only written when the legacy schema is in use (some pre-65
+            // client could read this pack), so newer-only packs stay warning-free.
+            if (useLegacyFormats) {
                 writer.name("formats");
                 PackFormatSerializer.serialize(overlay.formats(), writer);
             }
             writer.name("directory").value(overlay.directory());
+            // min_format/max_format are always written for 65+ entries so newer clients
+            // get the explicit fields even within a cross-version (legacy schema) pack.
             if (maxMajor > 64) {
                 writer.name("min_format").value(minMajor);
                 writer.name("max_format").value(maxMajor);
