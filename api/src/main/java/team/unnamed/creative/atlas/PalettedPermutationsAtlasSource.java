@@ -43,6 +43,16 @@ import java.util.Map;
 public interface PalettedPermutationsAtlasSource extends AtlasSource {
 
     /**
+     * The separator used between the base texture name and the permutation
+     * suffix when the source does not specify one.
+     *
+     * @sincePackFormat 13
+     * @sinceMinecraft 1.19.4
+     * @since 1.14.3
+     */
+    String DEFAULT_SEPARATOR = "_";
+
+    /**
      * Gets the list of keys of the base textures. These textures will be used
      * to generate variants of them that have been modified by color palettes.
      *
@@ -57,6 +67,11 @@ public interface PalettedPermutationsAtlasSource extends AtlasSource {
      * Gets the key of a color palette key file. This is used to define the set of key
      * pixel colors to swap out with the color palettes defined.
      *
+     * <p>The key resolves to {@code <namespace>:textures/<path>.png} before pack format
+     * {@link team.unnamed.creative.metadata.pack.FormatVersion#FORMAT_26_3} and to
+     * {@code <namespace>:textures/palettes/<path>.png} from it onwards, the writer places
+     * the palette texture at whichever locations the target pack format needs.</p>
+     *
      * @return The key of the color palette key file.
      * @sincePackFormat 13
      * @sinceMinecraft 1.19.4
@@ -67,8 +82,8 @@ public interface PalettedPermutationsAtlasSource extends AtlasSource {
     /**
      * Gets the map of permutations from suffix to a key of a color palette file.
      *
-     * <p>The suffix is prepended to the key of the output variant textures, with a {@code _}
-     * character separating the suffix and the base texture name.</p>
+     * <p>The suffix is prepended to the key of the output variant textures, with the
+     * {@link #separator()} separating the suffix and the base texture name.</p>
      *
      * <p>The number of pixels in each color palette must be the same as that of the {@link #paletteKey()}
      * defined for this source. Pixels are compared by RGB value. The alpha channel is ignored for key
@@ -76,11 +91,24 @@ public interface PalettedPermutationsAtlasSource extends AtlasSource {
      * alpha channel. Pixels that do not match the {@link #paletteKey()} are copied over to the resulting
      * texture as-is.</p>
      *
+     * <p>Palette keys resolve like {@link #paletteKey()} does.</p>
+     *
      * @return The map of permutations from suffix to a key of a color palette file.
      * @sincePackFormat 13
      * @sinceMinecraft 1.19.4
      * @since 1.0.0
      */
     @NotNull @Unmodifiable Map<String, Key> permutations();
+
+    /**
+     * Gets the separator placed between the base texture name and the permutation
+     * suffix when generating the output variant texture keys.
+     *
+     * @return The separator, {@link #DEFAULT_SEPARATOR} if unset.
+     * @sincePackFormat 13
+     * @sinceMinecraft 1.19.4
+     * @since 1.14.3
+     */
+    @NotNull String separator();
 
 }

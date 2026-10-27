@@ -24,14 +24,16 @@
 package team.unnamed.creative.serialize.minecraft;
 
 import net.kyori.adventure.key.Key;
-import net.kyori.adventure.key.Keyed;
 import org.jetbrains.annotations.ApiStatus;
 import team.unnamed.creative.sound.SoundRegistry;
 import team.unnamed.creative.texture.Texture;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.Queue;
+import java.util.Set;
 import java.util.StringJoiner;
 
 @ApiStatus.Internal
@@ -61,7 +63,35 @@ public final class MinecraftResourcePackStructure {
     public static final String TEXTURES_FOLDER = "textures";
     public static final String TEXTS_FOLDER = "texts";
 
+    // junk files created by operating systems that are not part of the
+    // resource-pack and must be ignored when reading (compared lower-cased)
+    private static final Set<String> IGNORED_FILE_NAMES = new HashSet<>(Arrays.asList(
+            ".ds_store",   // macOS Finder metadata
+            "thumbs.db",   // Windows thumbnail cache
+            "desktop.ini", // Windows folder settings
+            ".directory"   // KDE folder settings
+    ));
+
     private MinecraftResourcePackStructure() {
+    }
+
+    /**
+     * Determines whether the file at the given path is a junk file created
+     * by an operating system (e.g. {@code .DS_Store}) that should be ignored
+     * when reading a resource-pack.
+     *
+     * @param path The full path of the file
+     * @return True if the file should be ignored
+     */
+    public static boolean isIgnorableFile(String path) {
+        int lastSeparator = path.lastIndexOf(FILE_SEPARATOR);
+        String fileName = lastSeparator == -1 ? path : path.substring(lastSeparator + 1);
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        // macOS AppleDouble resource forks are prefixed with "._"
+        if (lower.startsWith("._")) {
+            return true;
+        }
+        return IGNORED_FILE_NAMES.contains(lower);
     }
 
     public static String pathOf(SoundRegistry registry) {
@@ -70,14 +100,21 @@ public final class MinecraftResourcePackStructure {
     }
 
     public static String pathOf(Texture texture) {
-        Key key = texture.key();
+        return pathOfTexture(texture.key());
+    }
+
+    public static String pathOfTexture(Key key) {
         // assets/<namespace>/textures/<path>
         return path(ASSETS_FOLDER, key.namespace(), TEXTURES_FOLDER, key.value());
     }
 
     public static String pathOfMeta(Texture texture) {
+        return pathOfTextureMeta(texture.key());
+    }
+
+    public static String pathOfTextureMeta(Key key) {
         // assets/<namespace>/textures/<path>.png.mcmeta
-        return withCategory(TEXTURES_FOLDER, texture, METADATA_EXTENSION);
+        return path(ASSETS_FOLDER, key.namespace(), TEXTURES_FOLDER, key.value() + METADATA_EXTENSION);
     }
 
     public static Queue<String> tokenize(String path) {
@@ -98,13 +135,6 @@ public final class MinecraftResourcePackStructure {
             joiner.add(part);
         }
         return joiner.toString();
-    }
-
-    // helper methods
-    public static String withCategory(String categoryFolder, Keyed resource, String extension) {
-        Key key = resource.key();
-        // assets/<namespace>/<category>/<path>.<extension>
-        return path(ASSETS_FOLDER, key.namespace(), categoryFolder, key.value() + extension);
     }
 
 }
