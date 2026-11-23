@@ -29,8 +29,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import team.unnamed.creative.base.Readable;
 import team.unnamed.creative.font.BitMapFontProvider;
+import team.unnamed.creative.font.FilteredFontProvider;
 import team.unnamed.creative.font.Font;
 import team.unnamed.creative.font.FontProvider;
+import team.unnamed.creative.font.TrueTypeFontProvider;
 import team.unnamed.creative.font.UnihexFontProvider;
 
 import java.io.IOException;
@@ -70,6 +72,25 @@ class FontDeserializationTest {
         List<String> chars = bitMapProvider.characters();
         assertEquals(1, chars.size(), "chars list must be singleton!");
         assertEquals("a", chars.getFirst(), "singleton string in list must be 'a'");
+    }
+
+    @Test
+    @DisplayName("Test a provider's filter survives deserialization and serialization")
+    void test_filtered_provider_round_trip() throws IOException {
+        String json = "{\"providers\":[" +
+                "{\"type\":\"ttf\",\"file\":\"creative:cjk_jp.ttf\",\"shift\":[0.0,3.0],\"size\":8.0,\"oversample\":2.0,\"filter\":{\"jp\":true}}," +
+                "{\"type\":\"ttf\",\"file\":\"creative:cjk.ttf\",\"shift\":[0.0,3.0],\"size\":8.0,\"oversample\":2.0}," +
+                "{\"type\":\"reference\",\"id\":\"creative:include/default\",\"filter\":{\"uniform\":false}}" +
+                "]}";
+        Font font = FontSerializer.INSTANCE.deserializeFromJsonString(json, Font.MINECRAFT_DEFAULT);
+        List<FontProvider> providers = font.providers();
+        assertEquals(3, providers.size());
+        FilteredFontProvider jp = assertInstanceOf(FilteredFontProvider.class, providers.get(0));
+        assertEquals(java.util.Map.of("jp", true), jp.filter());
+        assertInstanceOf(TrueTypeFontProvider.class, jp.provider());
+        assertInstanceOf(TrueTypeFontProvider.class, providers.get(1));
+        assertEquals(java.util.Map.of("uniform", false), assertInstanceOf(FilteredFontProvider.class, providers.get(2)).filter());
+        assertEquals(json, FontSerializer.INSTANCE.serializeToJsonString(font));
     }
 
     @Test

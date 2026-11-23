@@ -30,6 +30,7 @@ import com.google.gson.stream.JsonWriter;
 import net.kyori.adventure.key.Key;
 import team.unnamed.creative.base.Vector2Float;
 import team.unnamed.creative.font.BitMapFontProvider;
+import team.unnamed.creative.font.FilteredFontProvider;
 import team.unnamed.creative.font.Font;
 import team.unnamed.creative.font.FontProvider;
 import team.unnamed.creative.font.ReferenceFontProvider;
@@ -71,6 +72,12 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
                 .name("providers")
                 .beginArray();
         for (FontProvider provider : font.providers()) {
+            Map<String, Boolean> filter = Map.of();
+            if (provider instanceof FilteredFontProvider filtered) {
+                filter = filtered.filter();
+                provider = filtered.provider();
+            }
+            // each writes the provider's object without closing it, for its filter
             switch (provider) {
                 case BitMapFontProvider bitMapFontProvider -> writeBitMap(writer, bitMapFontProvider);
                 case SpaceFontProvider spaceFontProvider -> writeSpace(writer, spaceFontProvider);
@@ -79,6 +86,14 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
                 case UnihexFontProvider unihexFontProvider -> writeUnihex(writer, unihexFontProvider);
                 case null, default -> throw new IllegalStateException("Unknown font provider type: " + provider);
             }
+            if (!filter.isEmpty()) {
+                writer.name("filter").beginObject();
+                for (Map.Entry<String, Boolean> option : filter.entrySet()) {
+                    writer.name(option.getKey()).value(option.getValue());
+                }
+                writer.endObject();
+            }
+            writer.endObject();
         }
         writer.endArray().endObject();
     }
@@ -90,30 +105,24 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
         for (JsonElement providerNode : objectNode.getAsJsonArray("providers")) {
             JsonObject providerObjectNode = providerNode.getAsJsonObject();
             String type = providerObjectNode.get("type").getAsString();
-            switch (type) {
-                case "bitmap": {
-                    providers.add(readBitMap(providerObjectNode));
-                    break;
+            FontProvider provider = switch (type) {
+                case "bitmap" -> readBitMap(providerObjectNode);
+                case "space" -> readSpace(providerObjectNode);
+                case "ttf" -> readTrueType(providerObjectNode);
+                case "reference" -> readReference(providerObjectNode);
+                case "unihex" -> readUnihex(providerObjectNode);
+                default -> throw new IllegalStateException("Unknown font provider type: " + type);
+            };
+            if (providerObjectNode.has("filter")) {
+                Map<String, Boolean> filter = new LinkedHashMap<>();
+                for (Map.Entry<String, JsonElement> option : providerObjectNode.getAsJsonObject("filter").entrySet()) {
+                    filter.put(option.getKey(), option.getValue().getAsBoolean());
                 }
-                case "space": {
-                    providers.add(readSpace(providerObjectNode));
-                    break;
+                if (!filter.isEmpty()) {
+                    provider = FontProvider.filtered(provider, filter);
                 }
-                case "ttf": {
-                    providers.add(readTrueType(providerObjectNode));
-                    break;
-                }
-                case "reference": {
-                    providers.add(readReference(providerObjectNode));
-                    break;
-                }
-                case "unihex": {
-                    providers.add(readUnihex(providerObjectNode));
-                    break;
-                }
-                default:
-                    throw new IllegalStateException("Unknown font provider type: " + type);
             }
+            providers.add(provider);
         }
         return Font.font(key, providers);
     }
@@ -136,8 +145,7 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
             writer.value(row);
         }
 
-        writer.endArray()
-                .endObject();
+        writer.endArray();
     }
 
     private static BitMapFontProvider readBitMap(JsonObject node) {
@@ -161,7 +169,7 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
         for (Map.Entry<String, Integer> entry : provider.advances().entrySet()) {
             writer.name(entry.getKey()).value(entry.getValue());
         }
-        writer.endObject().endObject();
+        writer.endObject();
     }
 
     private static SpaceFontProvider readSpace(JsonObject node) {
@@ -188,7 +196,7 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
                     .name("right").value(sizeOverride.right())
                     .endObject();
         }
-        writer.endArray().endObject();
+        writer.endArray();
     }
 
     private static UnihexFontProvider readUnihex(JsonObject node) {
@@ -247,8 +255,6 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
         if (oversample != TrueTypeFontProvider.DEFAULT_OVERSAMPLE) {
             writer.name("oversample").value(oversample);
         }
-
-        writer.endObject();
     }
 
     private static TrueTypeFontProvider readTrueType(JsonObject node) {
@@ -288,7 +294,6 @@ public final class FontSerializer implements JsonResourceSerializer<Font>, JsonR
         writer.beginObject();
         writer.name("type").value("reference");
         writer.name("id").value(KeySerializer.toString(provider.id()));
-        writer.endObject();
     }
 
     private static ReferenceFontProvider readReference(JsonObject node) {

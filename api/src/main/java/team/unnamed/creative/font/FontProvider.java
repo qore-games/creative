@@ -159,4 +159,19 @@ public interface FontProvider {
     static @NotNull UnihexFontProvider.Builder unihex() {
         return new UnihexFontProviderImpl.BuilderImpl();
     }
+
+    /**
+     * Creates a provider the client only uses when its font options match {@code filter}
+     * ({@code "uniform"}, {@code "jp"}: see {@link FilteredFontProvider})
+     *
+     * @param provider The provider
+     * @param filter   The options and the value each must have
+     * @return A new filtered provider
+     * @sinceMinecraft 1.20
+     * @sincePackFormat 15
+     */
+    @Contract("_, _ -> new")
+    static @NotNull FilteredFontProvider filtered(final @NotNull FontProvider provider, final @NotNull Map<String, Boolean> filter) {
+        return new FilteredFontProvider(provider, filter);
+    }
 }
